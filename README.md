@@ -1,6 +1,6 @@
 # verse_getter
 A simple GUI app that uses [Bible Display API](https://ibibles.net/m/quote03.htm) to retrieve verses and write them to a text file.
-GUI is made with [PySimpleGUI](https://pysimplegui.readthedocs.io/en/latest/) and API requests use [urllib.request](https://docs.python.org/3/library/urllib.request.html#module-urllib.request)
+GUI is made with [PySimpleGUI](https://pysimplegui.readthedocs.io/en/latest/) and API requests use [urllib.request](https://docs.python.org/3/library/urllib.request.html#module-urllib.request).
 
 Supported Bible Versions
   - New Internation Version English
