@@ -6,8 +6,7 @@ Supported Bible Versions
   - New Internation Version English
   - King James Version English
 
-![test](https://user-images.githubusercontent.com/14161440/112121016-ab595800-8bb6-11eb-8b42-309e25e07ba4.png)
+![preview](https://user-images.githubusercontent.com/14161440/112121016-ab595800-8bb6-11eb-8b42-309e25e07ba4.png)
 
 TODO
   1. Allow custom output directory for verse text file.
-
