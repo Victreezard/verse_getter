@@ -19,7 +19,7 @@ bible_info = loads(bible_info)
 
 def _group_radio(dict, group_id, group_size, width=10, height=10):
     radio_list = []
-    keys = list(dict.keys())
+    keys = list(sorted(dict.keys()))
     total_item_counter = 0
     sublist_counter = 0
 
