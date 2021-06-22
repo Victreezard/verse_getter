@@ -3,17 +3,16 @@ from urllib.request import urlopen
 
 
 def _sanitize_verse(string):
-    pattern = r'(?<=>).+(?= <)'
-    replace_pattern = '</small>'
+    pattern = r'(?<=/small> ).+(?= <)'
 
-    result = [verse.replace(replace_pattern, '')
-              for verse in findall(pattern, string)]
-    return '\n'.join(result)
+    result = '\n'.join([verse for verse in findall(pattern, string)])
+    return result
 
 
 def get_verse(version, book, chapter, verse, chapter_end=None, verse_end=None):
     base_url = 'https://ibibles.net/quote.php?'
-    url = f'{base_url}{version}-{book}/{chapter}:{verse}'
+    # Replace spaces in Book names for URL encoding thing
+    url = f"{base_url}{version}-{book.replace(' ', '%20')}/{chapter}:{verse}"
 
     if chapter_end and verse_end:
         url += f'-{chapter_end}:{verse_end}'
@@ -25,5 +24,5 @@ def get_verse(version, book, chapter, verse, chapter_end=None, verse_end=None):
 
 
 if __name__ == "__main__":
-    verse = get_verse('niv', 'john', '1', '1', verse_end='3')
+    verse = get_verse('niv', '1 john', '1', '1', verse_end='3')
     print('\n', verse)
