@@ -1,16 +1,25 @@
 import PySimpleGUI as sg
+import sys
 from bible_api import get_verse
 from json import loads
+from os.path import abspath, join
 from re import fullmatch, findall
-from sys import exc_info
 
 
 bible_info_file = 'bible_info.json'
-verse_path_file = 'verse_output.txt'
+verse_output_file = 'verse_output.txt'
 
-with open(bible_info_file, 'r') as file:
-    bible_info = file.read()
-bible_info = loads(bible_info)
+
+def _get_resource_path(relative_path):
+    """ Get absolute path to resource
+    Source: https://stackoverflow.com/a/13790741 """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = abspath('.')
+
+    return join(base_path, relative_path)
 
 
 def _parse_chapterverse(label):
@@ -56,12 +65,16 @@ def _get_verse_args():
 
 
 def _write_verse(content):
-    with open(verse_path_file, 'w') as file:
+    with open(verse_output_file, 'w') as file:
         if not content:
             file.write('')
         else:
             file.write(content)
 
+
+with open(_get_resource_path(bible_info_file), 'r') as file:
+    bible_info = file.read()
+bible_info = loads(bible_info)
 
 sg.theme('Black')
 sg.set_options(font='30')
@@ -76,8 +89,8 @@ chapterverse_input = 'Chapter and Verse'
 col1 = sg.Col([
     [sg.Frame(version_combo, [
               [sg.Combo([key for key in bible_info['Versions']],
-              default_value=list(bible_info['Versions'].keys())[0],
-              k=version_combo)]])],
+                        default_value=list(bible_info['Versions'].keys())[0],
+                        k=version_combo)]])],
     [sg.Frame(book_listbox, [[sg.LB(sorted(
         [book for book in bible_info['Books']]), size=(None, 20), k=book_listbox)]])],
     [sg.Frame(chapterverse_input, [[sg.In(size=(10, None), k=chapterverse_input), sg.B(
@@ -91,7 +104,7 @@ verse_list = []
 col2 = sg.Col([
     [sg.Frame(verse_listbox, [
         [sg.LB(verse_list, size=(None, 20), k=verse_listbox)], [sg.B(show_button),
-                                                                 sg.B(remove_button)]
+                                                                sg.B(remove_button)]
     ])],
 
 ], vertical_alignment='top')
@@ -146,7 +159,7 @@ while True:
 
     except Exception as e:
         _write_verse('')
-        line_error = exc_info()[2].tb_lineno
+        line_error = sys.exc_info()[2].tb_lineno
         sg.popup(f"Line {line_error}: {e}", text_color='Red', )
 
 window.close()
