@@ -58,7 +58,7 @@ def _get_verse_args():
     if not values[chapterverse_input]:
         raise(Exception('Please enter Chapter and Verse'))
     values[chapterverse_input] = values[chapterverse_input].strip()
-    window.Element(chapterverse_input).Update(value=values[chapterverse_input])
+    window.Element(chapterverse_input).update(value=values[chapterverse_input])
     chapter, verse, chapter_end, verse_end = _parse_chapterverse(
         values[chapterverse_input])
     return version, book, chapter, verse, chapter_end, verse_end
@@ -81,12 +81,14 @@ sg.set_options(font='30')
 
 next_button = '⮞'
 prev_button = '⮜'
+move_up_button = '⮝'
+move_down_button = '⮟'
 get_button = 'GET'
 list_verse_button = 'List Verse'
 version_combo = 'Version'
 book_listbox = 'Book'
 chapterverse_input = 'Chapter and Verse'
-col1 = sg.Col([
+get_col = sg.Col([
     [sg.Frame(version_combo, [
               [sg.Combo([key for key in bible_info['Versions']],
                         default_value=list(bible_info['Versions'].keys())[0],
@@ -101,17 +103,23 @@ show_button = 'Show Verse'
 remove_button = 'Remove Verse'
 verse_listbox = 'Verse List'
 verse_list = []
-col2 = sg.Col([
-    [sg.Frame(verse_listbox, [
-        [sg.LB(verse_list, size=(None, 20), k=verse_listbox)], [sg.B(show_button),
-                                                                sg.B(remove_button)]
-    ])],
-
+move_col = sg.Col(
+    [[sg.B(move_up_button)], [sg.B(move_down_button)]],
+    vertical_alignment='center'
+)
+list_col = sg.Col([
+    [sg.Frame(
+        verse_listbox,
+        [
+            [sg.LB(verse_list, size=(None, 20), k=verse_listbox), move_col],
+            [sg.B(show_button), sg.B(remove_button)]
+        ]
+    )]
 ], vertical_alignment='top')
 
-layout = [[col1, sg.VSep(), col2]]
+layout = [[get_col, sg.VSep(), list_col]]
 
-window = sg.Window('Bible Display API', layout)
+window = sg.Window('Get that verse', layout)
 
 while True:
     try:
@@ -119,26 +127,6 @@ while True:
         if event == sg.WIN_CLOSED:
             _write_verse('')
             break
-
-        elif event == list_verse_button:
-            verse_list.append(' '.join(_get_verse_args()))
-            window.Element(verse_listbox).Update(values=verse_list)
-
-        elif event == show_button and values[verse_listbox]:
-            verse_args = values[verse_listbox][0].split(' ')
-            # Concatenate if Book has a leading number (e.g., 1 John)
-            if verse_args[1].isdecimal():
-                verse_args[1] += ' ' + verse_args.pop(2)
-
-            result_verse = get_verse(*verse_args)
-            if not result_verse:
-                raise(Exception('Bible Verse not found'))
-            _write_verse(
-                f'{verse_args[1]} {verse_args[2]}:{verse_args[3]}\n{result_verse}')
-
-        elif event == remove_button and values[verse_listbox]:
-            verse_list.remove(values[verse_listbox][0])
-            window.Element(verse_listbox).Update(values=verse_list)
 
         elif event == get_button or event == next_button or event == prev_button:
             verse_args = _get_verse_args()
@@ -156,6 +144,43 @@ while True:
                 raise(Exception('Bible Verse not found'))
             _write_verse(
                 f'{verse_args[1]} {verse_args[2]}:{verse_args[3]}\n{result_verse}')
+
+        elif event == list_verse_button:
+            verse_list.append(' '.join(_get_verse_args()))
+            window.Element(verse_listbox).Update(values=verse_list)
+
+        elif event == show_button and values[verse_listbox]:
+            verse_args = values[verse_listbox][0].split(' ')
+            # Concatenate if Book has a leading number (e.g., 1 John)
+            if verse_args[1].isdecimal():
+                verse_args[1] += ' ' + verse_args.pop(2)
+
+            result_verse = get_verse(*verse_args)
+            if not result_verse:
+                raise(Exception('Bible Verse not found'))
+            _write_verse(
+                f'{verse_args[1]} {verse_args[2]}:{verse_args[3]}\n{result_verse}')
+
+            window.Element(book_listbox).set_value([verse_args[1]])
+            window.Element(chapterverse_input).Update(
+                value=f'{verse_args[2]} {verse_args[3]}')
+
+        elif event == remove_button and values[verse_listbox]:
+            verse_list.remove(values[verse_listbox][0])
+            window.Element(verse_listbox).Update(values=verse_list)
+
+        elif (event == move_up_button or event == move_down_button) and values[verse_listbox]:
+            old_pos = verse_list.index(values[verse_listbox][0])
+            if event == move_up_button and old_pos > 0:
+                addend = -1
+            elif event == move_down_button and old_pos < len(verse_list) - 1:
+                addend = 1
+            else:
+                continue
+            verse_to_move = verse_list.pop(old_pos)
+            verse_list.insert(old_pos + addend, verse_to_move)
+            window.Element(verse_listbox).update(values=verse_list)
+            window.Element(verse_listbox).set_value(verse_list[verse_list.index(verse_to_move)])
 
     except Exception as e:
         _write_verse('')
