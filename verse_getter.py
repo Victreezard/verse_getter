@@ -1,46 +1,13 @@
-import PySimpleGUI as sg
-import sys
-from bible_api import get_verse
-from json import loads
-from os.path import abspath, join
+from bible import Bible
 from re import compile, I, M
-
-
-class Bible():
-    """
-    A class to attribute the contents of bible_info.json.
-    """
-
-    def __init__(self, bible_info_file='bible_info.json'):
-        bible_info = self._load_bible_info(bible_info_file)
-        for k, v in bible_info.items():
-            setattr(self, k, v)
-
-    def _load_bible_info(self, bible_info_file):
-        """
-        Return the contents of bible_info.json as a dictionary.
-        """
-        with open(self._get_resource_path(bible_info_file), 'r') as file:
-            bible_info = file.read()
-        return loads(bible_info)
-
-    def _get_resource_path(self, relative_path):
-        """
-        Get absolute path to resource.
-        Source: https://stackoverflow.com/a/13790741
-        """
-        try:
-            # PyInstaller creates a temp folder and stores path in _MEIPASS
-            base_path = sys._MEIPASS
-        except Exception:
-            base_path = abspath('.')
-        return join(base_path, relative_path)
+import cfg
+import sys
+import PySimpleGUI as sg
 
 
 class VerseGetter():
-    WARNING = '**'
-
-    def __init__(self, output_file='verse_output.txt'):
+    def __init__(self, output_file=cfg.OUTPUT):
+        self.WARNING = '**'
         self.output_file = output_file
         self.Bible = Bible()
 
@@ -52,15 +19,16 @@ class VerseGetter():
         with open(self.output_file, 'w') as file:
             file.write(content)
 
-    def _get_and_write_verse(self, verse_args):
+    def _produce(self, verse_args):
         """
         Convenience function that gets and writes a verse to the output_file.
         """
-        result_verse = get_verse(*verse_args)
+        result_verse = self.Bible.get_verse(*verse_args)
         if not result_verse:
             raise(Exception('Verse not found'))
-        self.write_output(
-            f'{verse_args[1]} {verse_args[2]}:{verse_args[3]}\n{result_verse}')
+        result_verse = f'{verse_args[1]} {verse_args[2]}:{verse_args[3]}\n{result_verse}'
+        self.write_output(result_verse)
+        return result_verse
 
     def _parse_chapterverse(self, text, fullmatch=True):
         """
@@ -83,27 +51,27 @@ class VerseGetter():
 
         raise(Exception('Incorrect format for Chapter and Verse'))
 
-    def _get_verse_args(self):
+    def _compile_args(self):
         """
         Retrieve and return the verse, book, chapter and verse from the UI.
         """
-        if not values[version_combo]:
+        if not values[VERSION_COMBO]:
             raise(Exception('Please select a Version'))
-        version = self.Bible.Versions.get(values[version_combo])
+        version = self.Bible.Version.get_code(values[VERSION_COMBO])
 
-        if not values[book_listbox]:
+        if not values[BOOK_LB]:
             raise(Exception('Please select a Book'))
-        book = values[book_listbox][0]
+        book = values[BOOK_LB][0]
 
-        if not values[chapterverse_input]:
+        if not values[CHVERSE_IN]:
             raise(Exception('Please enter a Chapter and Verse'))
-        values[chapterverse_input] = values[chapterverse_input].strip()
-        window.Element(chapterverse_input).update(
-            value=values[chapterverse_input])
-        chapter, verse = self._parse_chapterverse(values[chapterverse_input])
+        values[CHVERSE_IN] = values[CHVERSE_IN].strip()
+        window.Element(CHVERSE_IN).update(
+            value=values[CHVERSE_IN])
+        chapter, verse = self._parse_chapterverse(values[CHVERSE_IN])
         return version, book, chapter, verse
 
-    def extract_verses(self, text):
+    def extract(self, text):
         """
         Return a list of verses from a given text.
         """
@@ -116,7 +84,7 @@ class VerseGetter():
         split_pattern = compile(r' (?=\d+ \d+)')
         results = [split_pattern.split(verse) for verse in verses]
         # join Bible books as one string to easily search for each book match
-        books = '\n'.join(self.Bible.Books.keys())
+        books = '\n'.join(self.Bible.Book.get_names())
         for index, result in enumerate(results):
             p = compile(f'^{result[0]}\w*', M)
             match = p.findall(books)
@@ -128,6 +96,21 @@ class VerseGetter():
                 results[index] = f"{' '.join(result)} {self.WARNING}"
         return results
 
+    def validate(self, verse_list):
+        invalid_verses = []
+        for index, verse in enumerate(verse_list):
+            # Split verse into args
+            verse_args = verse.split(' ')
+            # Combine books with leading numbers (e.g., 1 John)
+            if verse_args[1].isdecimal():
+                verse_args[1] += ' ' + verse_args.pop(2)
+            # Validate, add to invalid list if invalid
+            if not self.Bible.get_verse(*verse_args):
+                invalid_verses.append(verse_list[index])
+                verse_list[index] += self.WARNING
+            sg.one_line_progress_meter('Validating verses', index + 1, len(verse_list))
+        return invalid_verses, verse_list
+
 
 if __name__ == "__main__":
     vg = VerseGetter()
@@ -135,73 +118,80 @@ if __name__ == "__main__":
     sg.theme('Black')
     sg.set_options(font='30')
 
-    next_button = '⮞'
-    prev_button = '⮜'
-    get_button = 'GET'
-    list_verse_button = 'List Verse'
-    version_combo = 'Version'
-    book_listbox = 'Book'
-    chapterverse_input = 'Chapter and Verse'
-    get_col = sg.Col([
-        [sg.Frame(
-            version_combo,
-            [[sg.Combo([key for key in vg.Bible.Versions],
-                       default_value=list(vg.Bible.Versions.keys())[0],
-                       k=version_combo)
+    # First Column
+    NEXT_B = '⮞'
+    PREV_B = '⮜'
+    GET_B = 'GET'
+    LIST_B = 'List Verse'
+    VERSION_COMBO = 'Version'
+    BOOK_LB = 'Book'
+    CHVERSE_IN = 'Chapter and Verse'
+    GET_COL = sg.Col([
+        [sg.Fr(
+            VERSION_COMBO,
+            [[sg.Combo(vg.Bible.Version.get_names(),
+                       default_value=vg.Bible.Version.get_names()[0],
+                       k=VERSION_COMBO)
               ]]
         )],
-        [sg.Frame(
-            book_listbox,
-            [[sg.LB(sorted([book for book in vg.Bible.Books]),
+        [sg.Fr(
+            BOOK_LB,
+            [[sg.LB(sorted(vg.Bible.Book.get_names()),
                     size=(None, 20),
-                    k=book_listbox)
+                    k=BOOK_LB)
               ]]
         )],
-        [sg.Frame(
-            chapterverse_input,
+        [sg.Fr(
+            CHVERSE_IN,
             [[
-                sg.In(size=(10, None), k=chapterverse_input),
-                sg.B(get_button), sg.B(prev_button),
-                sg.B(next_button), sg.B(list_verse_button)
+                sg.In(size=(10, None), k=CHVERSE_IN),
+                sg.B(GET_B), sg.B(PREV_B),
+                sg.B(NEXT_B), sg.B(LIST_B)
             ]]
         )]
     ])
 
-    move_up_button = '⮝'
-    move_down_button = '⮟'
-    show_button = 'Show'
-    remove_button = 'Remove'
-    edit_button = 'Edit'
-    clear_button = 'Clear List'
-    extract_button = 'Extract Verses'
-    validate_button = 'Validate Verses'
-    verse_listbox = 'Verse List'
+    # Second Column
+    MV_UP_B = '⮝'
+    MV_DOWN_B = '⮟'
+    SHOW_B = 'Show'
+    REMOVE_B = 'Remove'
+    EDIT_B = 'Edit'
+    CLEAR_B = 'Clear List'
+    EXTRACT_B = 'Extract Verses'
+    VALIDATE_B = 'Validate Verses'
+    VERSE_LB = 'Verse List'
     verse_list = []
-    move_col = sg.Col(
+    MV_COL = sg.Col(
         [
-            [sg.B(move_up_button)],
-            [sg.B(move_down_button)]
+            [sg.B(MV_UP_B)],
+            [sg.B(MV_DOWN_B)]
         ],
         vertical_alignment='center'
     )
-    list_col = sg.Col(
+    LIST_COL = sg.Col(
         [
-            [sg.Frame(
-                verse_listbox,
+            [sg.Fr(
+                VERSE_LB,
                 [
                     [sg.LB(verse_list, size=(None, 20),
-                           k=verse_listbox), move_col],
-                    [sg.B(show_button), sg.B(edit_button), sg.B(remove_button)],
-                    [sg.B(extract_button), sg.B(clear_button)],
-                    [sg.B(validate_button)]
+                           k=VERSE_LB), MV_COL],
+                    [sg.B(SHOW_B), sg.B(EDIT_B), sg.B(REMOVE_B)],
+                    [sg.B(EXTRACT_B), sg.B(CLEAR_B)],
+                    [sg.B(VALIDATE_B)]
                 ]
             )]
         ],
         vertical_alignment='top'
     )
 
-    layout = [[get_col, sg.VSep(), list_col]]
-    window = sg.Window('Get that verse', layout)
+    # Output Row
+    OUTPUT_T = 'DisplayVerse'
+    OUTPUT_FR = sg.Fr(OUTPUT_T, [[sg.Text('', (70, 5), auto_size_text=True,
+                                          justification='center', k=OUTPUT_T)]])
+
+    layout = [[GET_COL, sg.VSep(), LIST_COL], [OUTPUT_FR]]
+    window = sg.Window('Get that verse', layout, icon=cfg.ICON_PATH)
 
     while True:
         try:
@@ -210,40 +200,42 @@ if __name__ == "__main__":
                 vg.write_output()
                 break
 
-            elif event in (get_button, next_button, prev_button):
-                verse_args = vg._get_verse_args()
-                if event != get_button:
+            elif event in (GET_B, NEXT_B, PREV_B):
+                verse_args = vg._compile_args()
+                if event != GET_B:
                     verse_args = list(verse_args)
-                    if event == next_button:
+                    if event == NEXT_B:
                         verse_args[3] = str(int(verse_args[3]) + 1)
-                    elif event == prev_button:
+                    elif event == PREV_B:
                         verse_args[3] = str(int(verse_args[3]) - 1)
-                    window.Element(chapterverse_input).Update(
+                    window.Element(CHVERSE_IN).update(
                         value=f'{verse_args[2]} {verse_args[3]}')
 
-                vg._get_and_write_verse(verse_args)
+                result_verse = vg._produce(verse_args)
+                window.Element(OUTPUT_T).update(value=result_verse)
 
-            elif event == list_verse_button:
-                verse_list.append(' '.join(vg._get_verse_args()))
-                window.Element(verse_listbox).Update(values=verse_list)
+            elif event == LIST_B:
+                verse_list.append(' '.join(vg._compile_args()))
+                window.Element(VERSE_LB).update(values=verse_list)
 
-            elif event == show_button and values[verse_listbox]:
-                verse_args = values[verse_listbox][0].split(' ')
+            elif event == SHOW_B and values[VERSE_LB]:
+                verse_args = values[VERSE_LB][0].split(' ')
                 # Concatenate if Book has a leading number (e.g., 1 John)
                 if verse_args[1].isdecimal():
                     verse_args[1] += ' ' + verse_args.pop(2)
 
-                vg._get_and_write_verse(verse_args)
+                result_verse = vg._produce(verse_args)
 
-                window.Element(book_listbox).set_value([verse_args[1]])
-                window.Element(chapterverse_input).Update(
+                window.Element(BOOK_LB).set_value([verse_args[1]])
+                window.Element(CHVERSE_IN).update(
                     value=f'{verse_args[2]} {verse_args[3]}')
+                window.Element(OUTPUT_T).update(value=result_verse)
 
             # Limitations:
             # 1. If there are similar verses it will always change the first one
             # 2. For now, it can't verify the validity of the new verse
-            elif event == edit_button and values[verse_listbox]:
-                old_verse = values[verse_listbox][0]
+            elif event == EDIT_B and values[VERSE_LB]:
+                old_verse = values[VERSE_LB][0]
                 new_verse = sg.popup_get_text(
                     f'Modify verse: {old_verse}',
                     default_text=old_verse,
@@ -251,59 +243,47 @@ if __name__ == "__main__":
                 # Replace the old with the new
                 if new_verse:
                     verse_list[verse_list.index(old_verse)] = new_verse
-                    window.Element(verse_listbox).Update(values=verse_list)
+                    window.Element(VERSE_LB).update(values=verse_list)
 
-            elif event == remove_button and values[verse_listbox]:
-                verse_list.remove(values[verse_listbox][0])
-                window.Element(verse_listbox).Update(values=verse_list)
+            elif event == REMOVE_B and values[VERSE_LB]:
+                verse_list.remove(values[VERSE_LB][0])
+                window.Element(VERSE_LB).update(values=verse_list)
 
-            elif event in (move_up_button, move_down_button) and values[verse_listbox]:
-                old_pos = verse_list.index(values[verse_listbox][0])
-                if event == move_up_button and old_pos > 0:
+            elif event in (MV_UP_B, MV_DOWN_B) and values[VERSE_LB]:
+                old_pos = verse_list.index(values[VERSE_LB][0])
+                if event == MV_UP_B and old_pos > 0:
                     addend = -1
-                elif event == move_down_button and old_pos < len(verse_list) - 1:
+                elif event == MV_DOWN_B and old_pos < len(verse_list) - 1:
                     addend = 1
                 else:
                     continue
                 verse_to_move = verse_list.pop(old_pos)
                 verse_list.insert(old_pos + addend, verse_to_move)
-                window.Element(verse_listbox).update(values=verse_list)
-                window.Element(verse_listbox).set_value(
+                window.Element(VERSE_LB).update(values=verse_list)
+                window.Element(VERSE_LB).set_value(
                     verse_list[verse_list.index(verse_to_move)])
 
-            elif event == clear_button and verse_list:
+            elif event == CLEAR_B and verse_list:
                 if sg.popup_ok_cancel('Delete ALL verses in the list?', no_titlebar=True) == 'OK':
                     verse_list.clear()
-                    window.Element(verse_listbox).Update(values=verse_list)
+                    window.Element(VERSE_LB).update(values=verse_list)
 
-            elif event == extract_button:
+            elif event == EXTRACT_B:
                 text = sg.popup_get_text(
                     'Enter text containing bible verses', no_titlebar=True)
                 if text:
-                    verses = vg.extract_verses(text)
+                    verses = vg.extract(text)
                     # Include the currently selected Version then add the extracted verses to the list
                     verse_list.extend(
-                        [f'{vg.Bible.Versions.get(values[version_combo])} {verse}' for verse in verses])
-                    window.Element(verse_listbox).update(values=verse_list)
+                        [f'{vg.Bible.Version.get_code(values[VERSION_COMBO])} {verse}' for verse in verses])
+                    window.Element(VERSE_LB).update(values=verse_list)
 
-            elif event == validate_button and verse_list:
-                invalid_verses = []
-                for index, verse in enumerate(verse_list):
-                    # Split verse into args
-                    verse_args = verse.split(' ')
-                    # Combine books with leading numbers (e.g., 1 John)
-                    if verse_args[1].isdecimal():
-                        verse_args[1] += ' ' + verse_args.pop(2)
-                    # Validate, add to invalid list if invalid
-                    if not get_verse(*verse_args):
-                        invalid_verses.append(verse_list[index])
-                        verse_list[index] += vg.WARNING
-                    sg.one_line_progress_meter(
-                        'Validating verses', index + 1, len(verse_list))
+            elif event == VALIDATE_B and verse_list:
+                invalid_verses, verse_list = vg.validate(verse_list)
                 if invalid_verses:
                     sg.popup_error('Invalid verses found!', '\n'.join(
                         invalid_verses), no_titlebar=True)
-                    window.Element(verse_listbox).update(values=verse_list)
+                    window.Element(VERSE_LB).update(values=verse_list)
 
         except Exception as e:
             vg.write_output()
