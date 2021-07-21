@@ -108,7 +108,8 @@ class VerseGetter():
             if not self.Bible.get_verse(*verse_args):
                 invalid_verses.append(verse_list[index])
                 verse_list[index] += self.WARNING
-            sg.one_line_progress_meter('Validating verses', index + 1, len(verse_list))
+            sg.one_line_progress_meter(
+                'Validating verses', index + 1, len(verse_list))
         return invalid_verses, verse_list
 
 

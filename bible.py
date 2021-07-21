@@ -1,4 +1,3 @@
-from decorators import resolve_path
 from json import loads
 from re import findall
 from urllib.request import urlopen
@@ -33,10 +32,9 @@ class Bible():
         self.Book = Content(contents.get('Books'))
 
     @staticmethod
-    @resolve_path
     def load_data(data_file):
         """
-        Return the contents of bible_data.json as a dictionary.
+        Return the contents of a json file as a dictionary.
         """
         with open(data_file, 'r') as file:
             data = file.read()
