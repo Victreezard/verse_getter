@@ -1,63 +1,45 @@
 from bible import Bible
 from re import compile, I, M
+from typing import List, Tuple
 import cfg
 import sys
 import PySimpleGUI as sg
 
 
 class VerseGetter():
-    def __init__(self, output_file=cfg.OUTPUT):
+    def __init__(self, output_file: str = cfg.OUTPUT):
         self.WARNING = '**'
         self.output_file = output_file
         self.Bible = Bible()
 
-    def write_output(self, content=''):
-        """
-        Overwrite the output_file with the given string.
-        Writes empty by the default.
-        """
+    def write(self, content: str = ''):
+        "Overwrites the output_file with the content. Writes empty by the default."
         with open(self.output_file, 'w') as file:
             file.write(content)
 
-    def _produce(self, verse_args):
+    def _produce(self, verse_args: cfg.Verse_Args):
         """
-        Convenience function that gets and writes a verse to the output_file.
+        Convenience function that gets and writes a verse to the output_file and text element.
+        verse_args must contain version, book, chapter, and verse.
         """
         result_verse = self.Bible.get_verse(*verse_args)
         if not result_verse:
             raise(Exception('Verse not found'))
-        result_verse = f'{verse_args[1]} {verse_args[2]}:{verse_args[3]}\n{result_verse}'
-        self.write_output(result_verse)
-        return result_verse
+        self.write(result_verse)
+        window.Element(OUTPUT_T).update(value=result_verse)
 
-    def _parse_chapterverse(self, text, fullmatch=True):
-        """
-        Extract and return the Chapter and Verse in a list from the given text.
-
-        :param text: text to extract chapter and verse from
-        :type message: (str)
-        :param fullmatch: If True then text must only be two numbers with space in between
-        else it will return the first match it finds :type fullmatch: (bool)
-        :return: Chapter and Verse :rtype: list
-        """
+    def _parse_chapterverse(self, text: str) -> List[str]:
+        "Extracts the Chapter and Verse from a text and returns them in a list."
         pattern = compile(r'\d+ \d+')
-        if fullmatch:
-            if pattern.fullmatch(text):
-                return text.split()
-        else:
-            text = pattern.findall(text)[0]
-            if text:
-                return text.split()
-
+        if pattern.fullmatch(text):
+            return text.split()
         raise(Exception('Incorrect format for Chapter and Verse'))
 
-    def _compile_args(self):
-        """
-        Retrieve and return the verse, book, chapter and verse from the UI.
-        """
+    def _compile_args(self) -> cfg.Verse_Args:
+        "Returns the verse, book, chapter and verse compiled from the UI."
         if not values[VERSION_COMBO]:
             raise(Exception('Please select a Version'))
-        version = self.Bible.Version.get_code(values[VERSION_COMBO])
+        version = self.Bible.Version.get_id(values[VERSION_COMBO])
 
         if not values[BOOK_LB]:
             raise(Exception('Please select a Book'))
@@ -71,34 +53,38 @@ class VerseGetter():
         chapter, verse = self._parse_chapterverse(values[CHVERSE_IN])
         return version, book, chapter, verse
 
-    def extract(self, text):
-        """
-        Return a list of verses from a given text.
-        """
-        verse_pattern = compile(r'(([123] )?[\w.]+ \d+:\d+)', I)
+    def _move(self, verse: str, next: bool = True) -> str:
+        "Adds or subtracts a verse number."
+        addend = 1 if next is True else -1
+        return str(int(verse) + addend)
+
+    def extract(self, text: str) -> List[str]:
+        "Returns a list of verses from a text."
+        verse_pattern = compile(r'(([123] )?[\w.]+ \d+:\d+)', flags=I)
         verses = verse_pattern.findall(text)
         # findall will return 3 groups per match. Get first groups, remove dots, replace colons.
         verses = [verse[0].replace('.', '').replace(':', ' ')
                   for verse in verses]
-        # split up chapter and verse
+        # split up Book and ChapterVerse
         split_pattern = compile(r' (?=\d+ \d+)')
-        results = [split_pattern.split(verse) for verse in verses]
-        # join Bible books as one string to easily search for each book match
+        verses = [split_pattern.split(verse) for verse in verses]
+        # join Bible books as one string to easily search for the whole Book name
         books = '\n'.join(self.Bible.Book.get_names())
-        for index, result in enumerate(results):
-            p = compile(f'^{result[0]}\w*', M)
+        for index, verse in enumerate(verses):
+            p = compile(fr'^{verse[0]}\w*', flags=I | M)
             match = p.findall(books)
-            # If a match is found join the whole book name and chapter verse
+            # If only one match is found then join the whole book name and chapter verse
             # Else insert a Warning symbol before adding to the list
             if len(match) == 1:
-                results[index] = f'{match[0]} {result[1]}'
+                verses[index] = f'{match[0]} {verse[1]}'
             else:
-                results[index] = f"{' '.join(result)} {self.WARNING}"
-        return results
+                verses[index] = f"{' '.join(verse)} {self.WARNING}"
+        return verses
 
-    def validate(self, verse_list):
+    def _validate(self, verses: List[str]) -> Tuple[list, list]:
+        "Verifies a list of verses. Returns a tuple of invalid and valid verse lists."
         invalid_verses = []
-        for index, verse in enumerate(verse_list):
+        for index, verse in enumerate(verses):
             # Split verse into args
             verse_args = verse.split(' ')
             # Combine books with leading numbers (e.g., 1 John)
@@ -106,11 +92,11 @@ class VerseGetter():
                 verse_args[1] += ' ' + verse_args.pop(2)
             # Validate, add to invalid list if invalid
             if not self.Bible.get_verse(*verse_args):
-                invalid_verses.append(verse_list[index])
-                verse_list[index] += self.WARNING
+                invalid_verses.append(verses[index])
+                verses[index] += self.WARNING
             sg.one_line_progress_meter(
-                'Validating verses', index + 1, len(verse_list))
-        return invalid_verses, verse_list
+                'Validating verses', index + 1, len(verses))
+        return invalid_verses, verses
 
 
 if __name__ == "__main__":
@@ -131,7 +117,7 @@ if __name__ == "__main__":
         [sg.Fr(
             VERSION_COMBO,
             [[sg.Combo(vg.Bible.Version.get_names(),
-                       default_value=vg.Bible.Version.get_names()[0],
+                       default_value=vg.Bible.Version.get_names(0),
                        k=VERSION_COMBO)
               ]]
         )],
@@ -198,22 +184,23 @@ if __name__ == "__main__":
         try:
             event, values = window.read()
             if event == sg.WIN_CLOSED:
-                vg.write_output()
+                vg.write()
                 break
 
-            elif event in (GET_B, NEXT_B, PREV_B):
+            elif event in GET_B:
                 verse_args = vg._compile_args()
-                if event != GET_B:
-                    verse_args = list(verse_args)
-                    if event == NEXT_B:
-                        verse_args[3] = str(int(verse_args[3]) + 1)
-                    elif event == PREV_B:
-                        verse_args[3] = str(int(verse_args[3]) - 1)
-                    window.Element(CHVERSE_IN).update(
-                        value=f'{verse_args[2]} {verse_args[3]}')
+                vg._produce(verse_args)
 
-                result_verse = vg._produce(verse_args)
-                window.Element(OUTPUT_T).update(value=result_verse)
+            elif event in (NEXT_B, PREV_B):
+                verse_args = vg._compile_args()
+                verse_args = list(verse_args)
+                if event == NEXT_B:
+                    verse_args[3] = vg._move(verse_args[3])
+                elif event == PREV_B:
+                    verse_args[3] = vg._move(verse_args[3], False)
+                vg._produce(verse_args)
+                window.Element(CHVERSE_IN).update(
+                    value=f'{verse_args[2]} {verse_args[3]}')
 
             elif event == LIST_B:
                 verse_list.append(' '.join(vg._compile_args()))
@@ -225,12 +212,10 @@ if __name__ == "__main__":
                 if verse_args[1].isdecimal():
                     verse_args[1] += ' ' + verse_args.pop(2)
 
-                result_verse = vg._produce(verse_args)
-
+                vg._produce(verse_args)
                 window.Element(BOOK_LB).set_value([verse_args[1]])
                 window.Element(CHVERSE_IN).update(
                     value=f'{verse_args[2]} {verse_args[3]}')
-                window.Element(OUTPUT_T).update(value=result_verse)
 
             # Limitations:
             # 1. If there are similar verses it will always change the first one
@@ -276,18 +261,18 @@ if __name__ == "__main__":
                     verses = vg.extract(text)
                     # Include the currently selected Version then add the extracted verses to the list
                     verse_list.extend(
-                        [f'{vg.Bible.Version.get_code(values[VERSION_COMBO])} {verse}' for verse in verses])
+                        [f'{vg.Bible.Version.get_id(values[VERSION_COMBO])} {verse}' for verse in verses])
                     window.Element(VERSE_LB).update(values=verse_list)
 
             elif event == VALIDATE_B and verse_list:
-                invalid_verses, verse_list = vg.validate(verse_list)
+                invalid_verses, verse_list = vg._validate(verse_list)
                 if invalid_verses:
                     sg.popup_error('Invalid verses found!', '\n'.join(
                         invalid_verses), no_titlebar=True)
                     window.Element(VERSE_LB).update(values=verse_list)
 
         except Exception as e:
-            vg.write_output()
+            vg.write()
             line_error = sys.exc_info()[2].tb_lineno
             sg.popup(f"Line {line_error}: {e}", text_color='Red', )
 

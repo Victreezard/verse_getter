@@ -1,7 +1,7 @@
 {
     "Versions": {
-        "English New International Version": "niv",
-        "English King James Version": "kjv"
+        "New International Version": "NIV",
+        "King James Version": "KJV"
     },
     "Books": {
         "Genesis": "ge",
