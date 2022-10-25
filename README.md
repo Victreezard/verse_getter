@@ -1,15 +1,16 @@
-# verse_getter
-An app that uses [Bible Display API](https://ibibles.net/m/quote03.htm) to retrieve Bible Verses.
-UI is made with [PySimpleGUI](https://pysimplegui.readthedocs.io/en/latest/) and API requests use [urllib.request](https://docs.python.org/3/library/urllib.request.html#module-urllib.request).
+# Overview
+A collection of Python scripts for OBS that retrieve bible verses and update selected Text sources
 
-![verse_getter](https://user-images.githubusercontent.com/14161440/127985813-f11f03e0-db2c-40b6-acf6-6d845511e1e2.png)
+# Features
+## verse_getter
+  - Retrieve bible verses from [Bible Display API](https://ibibles.net/m/quote03.htm)
 
-Features:
-  - Retrieve Bible Verses and writes them to a text file
-  - Contains a preview panel for convenience
-  - Create a list of verses for easy access
-  - Extract a list of verses from a given text
+## verse_of_the_day
+  - Retrieve the verse of the day from [BibleGateway](https://www.biblegateway.com/usage/votd)
 
-Supported Bible Versions
-  - New Internation Version English
-  - King James Version English
+# Requirements
+  - Python 3.6
+  - OBS 27.2.4
+
+# TODO
+  - Update for compatibility with OBS Studio 28.0.3
